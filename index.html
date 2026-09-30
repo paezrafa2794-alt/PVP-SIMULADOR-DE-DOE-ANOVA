@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Arena: Variance Wars (Dynamic PvP)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background-color: #0b0f19;
+            color: #e2e8f0;
+        }
+        .orbitron { font-family: 'Orbitron', sans-serif; }
+        .glow-cyan { text-shadow: 0 0 10px rgba(6, 182, 212, 0.7); }
+        .glow-red { text-shadow: 0 0 10px rgba(239, 68, 68, 0.7); }
+        .box-glow { box-shadow: 0 0 15px rgba(6, 182, 212, 0.15); }
+        .box-glow-red { box-shadow: 0 0 15px rgba(239, 68, 68, 0.25); }
+    </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen flex flex-col justify-between bg-slate-950 text-slate-100 relative">
+
+    <!-- OVERLAY RESULTADO (VICTORIA / DERROTA) -->
+    <div id="game-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center hidden">
+        <div id="modal-box" class="bg-slate-900 border-2 rounded-2xl p-8 max-w-md text-center box-glow transition-all transform scale-95">
+            <h1 id="modal-title" class="orbitron text-4xl font-black mb-2">RESULTADO</h1>
+            <p id="modal-desc" class="text-sm text-slate-300 mb-6">Detalles de la batalla...</p>
+            <button onclick="generateRandomScenario(); closeModal();" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-3 rounded-lg orbitron tracking-wider transition">
+                🔄 JUGAR OTRA RONDA
+            </button>
+        </div>
+    </div>
+
+    <!-- HEADER / ARENA HUD -->
+    <header class="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-6 box-glow">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+            
+            <!-- PLAYER 1 -->
+            <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                    <span class="orbitron font-bold text-cyan-400 text-lg">INGENIERO P1 (TÚ)</span>
+                    <span id="p1-hp-text" class="text-sm font-bold text-cyan-400">100 / 100 HP</span>
+                </div>
+                <div class="w-full bg-slate-800 h-4 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                    <div id="p1-hp-bar" class="bg-cyan-500 h-full rounded-full transition-all duration-500" style="width: 100%;"></div>
+                </div>
+                <div class="flex items-center text-xs text-yellow-400 gap-1">
+                    <span>⚡ Puntos Varianza (VP):</span>
+                    <span id="p1-vp" class="font-bold text-sm">100</span>
+                </div>
+            </div>
+
+            <!-- TIMER & RELOAD -->
+            <div class="text-center bg-slate-950 border border-slate-800 rounded-lg p-2 box-glow flex flex-col items-center justify-center">
+                <span class="text-xs text-slate-400 block orbitron">TIEMPO RESTANTE</span>
+                <span id="timer" class="orbitron text-4xl font-black text-amber-400 glow-cyan">30:00</span>
+                <button onclick="generateRandomScenario()" class="mt-2 text-[10px] bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-800 px-2 py-1 rounded transition orbitron">
+                    🎲 NUEVO PROBLEMA (RELOAD)
+                </button>
+            </div>
+
+            <!-- RIVAL (BOT) -->
+            <div class="space-y-2 text-right">
+                <div class="flex justify-between items-center">
+                    <span id="bot-status" class="text-xs text-rose-400 italic">🔥 Preparando ataque...</span>
+                    <span class="orbitron font-bold text-rose-500 text-lg">BOT: OPTIMIZER-X</span>
+                </div>
+                <div class="w-full bg-slate-800 h-4 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                    <div id="bot-hp-bar" class="bg-rose-500 h-full rounded-full transition-all duration-500" style="width: 100%;"></div>
+                </div>
+                <div class="text-xs text-rose-400 font-bold" id="bot-hp-text">100 / 100 HP</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN GAME AREA -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow">
+        
+        <!-- LEFT COLUMN: SCENARIO & DATA TABLE -->
+        <section class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl p-5 box-glow flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center mb-3">
+                    <span id="scenario-tag" class="text-xs font-bold text-amber-400 uppercase tracking-widest orbitron">⚠ DESAFÍO INDUSTRIAL</span>
+                    <span id="industry-type" class="bg-slate-800 text-slate-300 text-xs px-2.5 py-1 rounded border border-slate-700">Inyección de Plástico</span>
+                </div>
+                <h2 id="scenario-title" class="orbitron text-xl font-bold text-white mb-2">Resistencia al Impacto en Polímero ABS</h2>
+                <p id="scenario-desc" class="text-sm text-slate-400 mb-4"></p>
+
+                <!-- DATA TABLE -->
+                <div class="overflow-x-auto mb-4">
+                    <table class="w-full text-sm text-center border-collapse">
+                        <thead id="data-table-head">
+                            <!-- Generated dynamically -->
+                        </thead>
+                        <tbody id="data-table-body" class="divide-y divide-slate-800">
+                            <!-- Generated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- ANOVA AUXILIARY DATA -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs text-center mb-4">
+                    <div><span class="text-slate-500 block">Suma Gran Total ($T$)</span><span id="grand-total" class="font-bold text-yellow-400">0.00</span></div>
+                    <div><span class="text-slate-500 block">Media Global ($\bar{X}$)</span><span id="grand-mean" class="font-bold text-cyan-300">0.00</span></div>
+                    <div><span class="text-slate-500 block">Grados Lib Trat ($df_{Trat}$)</span><span id="df-trat" class="font-bold text-white">0</span></div>
+                    <div><span class="text-slate-500 block">Grados Lib Err ($df_E$)</span><span id="df-e" class="font-bold text-white">0</span></div>
+                </div>
+            </div>
+
+            <!-- VISUALIZATION CANVAS -->
+            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 h-48">
+                <canvas id="varianceChart"></canvas>
+            </div>
+        </section>
+
+        <!-- RIGHT COLUMN: RESOLUTION PANEL & POWER-UPS -->
+        <section class="lg:col-span-5 flex flex-col gap-4">
+            
+            <!-- POWER UPS -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 box-glow">
+                <h3 class="text-xs font-bold text-amber-400 orbitron uppercase mb-3">⚡ HABILIDADES TÁCTICAS (POWER-UPS)</h3>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btn-lsd" onclick="usePowerUp('lsd')" class="bg-slate-800 hover:bg-cyan-950 border border-cyan-800 p-2 rounded text-left transition">
+                        <div class="text-cyan-400 font-bold text-xs orbitron">⚡ LSD Attack</div>
+                        <div class="text-[10px] text-slate-400">40 VP • +30% Daño</div>
+                    </button>
+                    <button id="btn-tukey" onclick="usePowerUp('tukey')" class="bg-slate-800 hover:bg-emerald-950 border border-emerald-800 p-2 rounded text-left transition">
+                        <div class="text-emerald-400 font-bold text-xs orbitron">🛡️ Tukey Aegis</div>
+                        <div class="text-[10px] text-slate-400">50 VP • Escudo Anti-Bot</div>
+                    </button>
+                    <button id="btn-duncan" onclick="usePowerUp('duncan')" class="bg-slate-800 hover:bg-purple-950 border border-purple-800 p-2 rounded text-left transition">
+                        <div class="text-purple-400 font-bold text-xs orbitron">🎯 Duncan Burst</div>
+                        <div class="text-[10px] text-slate-400">60 VP • Golpe Crítico</div>
+                    </button>
+                    <button id="btn-fog" onclick="usePowerUp('fog')" class="bg-slate-800 hover:bg-rose-950 border border-rose-800 p-2 rounded text-left transition">
+                        <div class="text-rose-400 font-bold text-xs orbitron">🌫️ Data Fog</div>
+                        <div class="text-[10px] text-slate-400">35 VP • Cancela 1 Ataque</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- TACTICAL RESOLUTION PANEL -->
+            <div id="action-panel" class="bg-slate-900 border border-slate-800 rounded-xl p-5 box-glow flex-grow flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="orbitron font-bold text-cyan-400 text-sm">🧮 PANEL DE RESOLUCIÓN TÁCTICA</h3>
+                        <span class="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-400">$\alpha = 0.05$</span>
+                    </div>
+
+                    <form id="calc-form" class="space-y-4 text-xs" onsubmit="event.preventDefault();">
+                        <!-- INPUT: SS_TRAT & MS_E -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-slate-400 mb-1">Suma Cuadrados Trat ($SS_{Trat}$):</label>
+                                <input type="number" step="0.01" id="input-ss-trat" placeholder="0.00" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-yellow-400 font-bold focus:border-cyan-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1">Cuadrado Medio Error ($MS_E$):</label>
+                                <input type="number" step="0.01" id="input-ms-e" placeholder="0.00" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-cyan-400 font-bold focus:border-cyan-500 outline-none">
+                            </div>
+                        </div>
+
+                        <!-- INPUT: F_CALC & H0 DECISION -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-slate-400 mb-1">Estadístico $F_{calc}$:</label>
+                                <input type="number" step="0.01" id="input-f-calc" placeholder="0.00" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-bold focus:border-cyan-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1">Decisión Hipótesis $H_0$:</label>
+                                <select id="select-h0" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-200 focus:border-cyan-500 outline-none">
+                                    <option value="">-- Selecciona --</option>
+                                    <option value="reject">Rechazar H0 (p < 0.05)</option>
+                                    <option value="fail">No Rechazar H0</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- INPUT: POST-HOC TEST -->
+                        <div>
+                            <label class="block text-slate-400 mb-2">Selección de Prueba Post-Hoc Óptima:</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <label class="flex items-center gap-1.5 bg-slate-950 p-2 rounded border border-slate-800 cursor-pointer hover:border-slate-700">
+                                    <input type="radio" name="posthoc" value="tukey" class="accent-cyan-500">
+                                    <span>Tukey HSD</span>
+                                </label>
+                                <label class="flex items-center gap-1.5 bg-slate-950 p-2 rounded border border-slate-800 cursor-pointer hover:border-slate-700">
+                                    <input type="radio" name="posthoc" value="lsd" class="accent-cyan-500">
+                                    <span>Fisher LSD</span>
+                                </label>
+                                <label class="flex items-center gap-1.5 bg-slate-950 p-2 rounded border border-slate-800 cursor-pointer hover:border-slate-700">
+                                    <input type="radio" name="posthoc" value="duncan" class="accent-cyan-500">
+                                    <span>Duncan</span>
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- SUBMIT BUTTON -->
+                <button id="btn-submit" onclick="submitAttack()" class="w-full mt-4 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold py-3 rounded-lg orbitron tracking-wider transition box-glow flex items-center justify-center gap-2">
+                    <span>⚔️ EJECUTAR ATAQUE ESTADÍSTICO</span>
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- LOG & FEEDBACK -->
+    <footer id="battle-log" class="mt-4 bg-slate-900 border border-slate-800 rounded-lg p-3 text-xs text-slate-400 h-20 overflow-y-auto font-mono">
+        > Motor Hardcore activado. Rondas de 30 minutos. Parámetros k, n y N dinámicos.
+    </footer>
+
+    <!-- JAVASCRIPT ENGINE -->
+    <script>
+        let dataset = [];
+        let CORRECT = {};
+        let myChart = null;
+
+        let p1Hp = 100;
+        let botHp = 100;
+        let p1Vp = 100;
+        let activePowerUp = null;
+        let isGameOver = false;
+
+        // TIMER 30 MINUTES (1800 SECONDS)
+        let timeLeft = 1800;
+        let timerInterval = null;
+
+        const SCENARIOS = [
+            { tag: "⚠ DESAFÍO #102", industry: "Planta Automotriz", title: "Resistencia al Impacto en Polímero ABS", desc: "Variación de la temperatura sobre la tenacidad.", unit: "kJ/m²", levelNames: ["210°C", "220°C", "230°C", "240°C", "250°C"] },
+            { tag: "⚠ DESAFÍO #205", industry: "Ensambladora SMT", title: "Tensión de Desprendimiento en Soldadura", desc: "Evaluación de formulaciones de pasta de soldadura.", unit: "N", levelNames: ["Flux Alpha", "Flux Beta", "Flux Gamma", "Flux Delta", "Flux Epsilon"] },
+            { tag: "⚠ DESAFÍO #409", industry: "Metalurgia", title: "Dureza Brinell en Aleaciones de Aluminio", desc: "Efecto del tiempo de tratamiento térmico de revenido.", unit: "HBW", levelNames: ["2 Horas", "4 Horas", "6 Horas", "8 Horas", "10 Horas"] },
+            { tag: "⚠ DESAFÍO #512", industry: "Química Industrial", title: "Rendimiento en Sintetización de Catalizador", desc: "Comparación del nivel de agitación magnética.", unit: "% Yield", levelNames: ["300 RPM", "500 RPM", "700 RPM", "900 RPM", "1100 RPM"] }
+        ];
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timeLeft = 1800; // 30 Minutos
+            const timerEl = document.getElementById('timer');
+            
+            timerInterval = setInterval(() => {
+                if (timeLeft > 0 && !isGameOver) {
+                    timeLeft--;
+                    const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+                    const secs = (timeLeft % 60).toString().padStart(2, '0');
+                    timerEl.textContent = `${mins}:${secs}`;
+                } else if (timeLeft === 0 && !isGameOver) {
+                    p1Hp = 0;
+                    updateHpUI();
+                    triggerGameOver(false, "⏰ ¡TIEMPO AGOTADO! El sistema colapsó por inacción.");
+                }
+            }, 1000);
+        }
+
+        function generateRandomScenario() {
+            isGameOver = false;
+            p1Hp = 100;
+            botHp = 100;
+            p1Vp = 100;
+            activePowerUp = null;
+
+            updateHpUI();
+            document.getElementById('p1-vp').textContent = p1Vp;
+            document.getElementById('btn-submit').disabled = false;
+            document.getElementById('action-panel').classList.remove('opacity-50', 'pointer-events-none');
+
+            // ALEATORIZACIÓN DE K (TRATAMIENTOS: 3 a 5) Y N (RÉPLICAS: 4 a 6)
+            const k = Math.floor(Math.random() * 3) + 3; // 3, 4, o 5
+            const n = Math.floor(Math.random() * 3) + 4; // 4, 5, o 6
+            const N = k * n;
+            const dfTrat = k - 1;
+            const dfE = N - k;
+
+            const sc = SCENARIOS[Math.floor(Math.random() * SCENARIOS.length)];
+            const selectedLevels = sc.levelNames.slice(0, k);
+
+            document.getElementById('scenario-tag').textContent = sc.tag;
+            document.getElementById('industry-type').textContent = sc.industry;
+            document.getElementById('scenario-title').textContent = sc.title;
+            document.getElementById('scenario-desc').innerHTML = `${sc.desc}<br><span class="text-slate-300 font-bold">Variables del Modulo:</span> $k=${k}$ tratamientos, $n=${n}$ réplicas ($N=${N}$). Unidad: ${sc.unit}.`;
+
+            const baseMean = Math.floor(Math.random() * 50) + 30;
+            dataset = [];
+            let grandSum = 0;
+
+            selectedLevels.forEach((lvl, idx) => {
+                const targetMean = baseMean + (idx * Math.floor(Math.random() * 6 + 2));
+                let r = [];
+                let sum = 0;
+                for (let i = 0; i < n; i++) {
+                    const val = parseFloat((targetMean + (Math.random() * 4 - 2)).toFixed(2));
+                    r.push(val);
+                    sum += val;
+                }
+                const mean = sum / n;
+                grandSum += sum;
+                dataset.push({ name: lvl, r: r, sum: sum, mean: mean });
+            });
+
+            const grandMean = grandSum / N;
+
+            // CÁLCULOS EXACTOS
+            let ssTrat = 0;
+            dataset.forEach(d => { ssTrat += (Math.pow(d.sum, 2) / n); });
+            ssTrat -= (Math.pow(grandSum, 2) / N);
+
+            let ssE = 0;
+            dataset.forEach(d => {
+                d.r.forEach(val => { ssE += Math.pow(val - d.mean, 2); });
+            });
+
+            const msE = ssE / dfE;
+            const msTrat = ssTrat / dfTrat;
+            const fCalc = msTrat / msE;
+
+            CORRECT = {
+                ssTrat: parseFloat(ssTrat.toFixed(2)),
+                msE: parseFloat(msE.toFixed(2)),
+                fCalc: parseFloat(fCalc.toFixed(2)),
+                h0: fCalc > 3.0 ? "reject" : "fail",
+                posthoc: "tukey"
+            };
+
+            // RENDERIZAR ENCABEZADO Y TABLA
+            const thead = document.getElementById('data-table-head');
+            let headHTML = `<tr class="bg-slate-800 text-cyan-400 border-b border-slate-700 text-xs"><th class="p-2 text-left">Tratamiento</th>`;
+            for (let i = 1; i <= n; i++) headHTML += `<th class="p-2">R${i}</th>`;
+            headHTML += `<th class="p-2 text-yellow-400">Suma ($T_i$)</th><th class="p-2 text-cyan-300">Media ($\bar{X}_i$)</th></tr>`;
+            thead.innerHTML = headHTML;
+
+            const tbody = document.getElementById('data-table-body');
+            tbody.innerHTML = '';
+            dataset.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/50";
+                tr.innerHTML = `
+                    <td class="p-2 text-left font-bold text-slate-200">${row.name}</td>
+                    ${row.r.map(v => `<td class="p-2 text-slate-400">${v.toFixed(2)}</td>`).join('')}
+                    <td class="p-2 font-bold text-yellow-400">${row.sum.toFixed(2)}</td>
+                    <td class="p-2 font-bold text-cyan-300">${row.mean.toFixed(2)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('grand-total').textContent = grandSum.toFixed(2);
+            document.getElementById('grand-mean').textContent = grandMean.toFixed(2);
+            document.getElementById('df-trat').textContent = dfTrat;
+            document.getElementById('df-e').textContent = dfE;
+
+            renderChart();
+
+            // REINICIAR INPUTS
+            document.getElementById('input-ss-trat').value = '';
+            document.getElementById('input-ms-e').value = '';
+            document.getElementById('input-f-calc').value = '';
+            document.getElementById('select-h0').value = '';
+            document.querySelectorAll('input[name="posthoc"]').forEach(r => r.checked = false);
+
+            startTimer();
+            log(`Nuevo escenario cargado: <span class="text-yellow-400 font-bold">${sc.title}</span> ($k=${k}$, $n=${n}$). ¡Resuelve antes de 30 min!`);
+        }
+
+        function renderChart() {
+            const ctx = document.getElementById('varianceChart').getContext('2d');
+            if (myChart) myChart.destroy();
+
+            const colors = ['#06b6d4', '#f59e0b', '#10b981', '#a855f7', '#ec4899'];
+
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: dataset.map(d => d.name),
+                    datasets: [{
+                        label: 'Media Medida',
+                        data: dataset.map(d => d.mean),
+                        backgroundColor: dataset.map((_, i) => colors[i % colors.length] + '88'),
+                        borderColor: dataset.map((_, i) => colors[i % colors.length]),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                        x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function log(msg) {
+            const logEl = document.getElementById('battle-log');
+            logEl.innerHTML += `<br>> ${msg}`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function usePowerUp(type) {
+            if (isGameOver) return;
+            const costs = { lsd: 40, tukey: 50, duncan: 60, fog: 35 };
+            if (p1Vp >= costs[type]) {
+                p1Vp -= costs[type];
+                document.getElementById('p1-vp').textContent = p1Vp;
+                activePowerUp = type;
+                log(`Habilidad preparada: <span class="text-amber-400 uppercase font-bold">${type}</span>.`);
+            } else {
+                log(`<span class="text-rose-400">¡Puntos de Varianza (VP) insuficientes!</span>`);
+            }
+        }
+
+        function updateHpUI() {
+            document.getElementById('p1-hp-bar').style.width = p1Hp + '%';
+            document.getElementById('p1-hp-text').textContent = `${p1Hp} / 100 HP`;
+            document.getElementById('bot-hp-bar').style.width = botHp + '%';
+            document.getElementById('bot-hp-text').textContent = `${botHp} / 100 HP`;
+        }
+
+        function submitAttack() {
+            if (isGameOver) return;
+
+            const ssTrat = parseFloat(document.getElementById('input-ss-trat').value) || 0;
+            const msE = parseFloat(document.getElementById('input-ms-e').value) || 0;
+            const fCalc = parseFloat(document.getElementById('input-f-calc').value) || 0;
+            const h0 = document.getElementById('select-h0').value;
+            const posthocEl = document.querySelector('input[name="posthoc"]:checked');
+            const posthoc = posthocEl ? posthocEl.value : null;
+
+            let playerDamage = 0;
+            let errors = [];
+
+            // VALIDACIÓN DE DATOS
+            if (Math.abs(ssTrat - CORRECT.ssTrat) <= 1.0) playerDamage += 25; else errors.push("SS_Trat");
+            if (Math.abs(msE - CORRECT.msE) <= 0.1) playerDamage += 25; else errors.push("MS_E");
+            if (Math.abs(fCalc - CORRECT.fCalc) <= 1.0) playerDamage += 25; else errors.push("F_calc");
+            if (h0 === CORRECT.h0) playerDamage += 15; else errors.push("Decisión H0");
+            if (posthoc === CORRECT.posthoc) playerDamage += 10; else errors.push("Prueba Post-Hoc");
+
+            // POWER UP BUFFS
+            if (activePowerUp === 'lsd') playerDamage = Math.round(playerDamage * 1.3);
+            if (activePowerUp === 'duncan' && errors.length === 0) playerDamage *= 2;
+
+            // ATAQUE AL BOT
+            if (playerDamage > 0) {
+                botHp = Math.max(0, botHp - playerDamage);
+                log(`<span class="text-cyan-400 font-bold">¡Impacto certero!</span> Infligiste <span class="text-yellow-400 font-bold">${playerDamage} de daño</span> al bot.`);
+            }
+
+            // CONTRAATAQUE POR ERRORES
+            if (errors.length > 0) {
+                let botDamage = errors.length * 20;
+
+                if (activePowerUp === 'tukey' || activePowerUp === 'fog') {
+                    botDamage = 0;
+                    log(`<span class="text-emerald-400 font-bold">🛡️ Tu Habilidad (${activePowerUp.toUpperCase()}) absorbió el ataque.</span>`);
+                } else {
+                    p1Hp = Math.max(0, p1Hp - botDamage);
+                    log(`<span class="text-rose-500 font-bold">💥 ¡CONTRAATAQUE ENEMIGO!</span> Fallaste en (${errors.join(', ')}). Recibes <span class="text-rose-400 font-bold">${botDamage} de daño</span>.`);
+                }
+            } else {
+                log(`<span class="text-emerald-400 font-bold">¡Cálculos perfectos! Sin contraataque.</span>`);
+            }
+
+            updateHpUI();
+
+            // REVISAR CONDICIONES DE FIN DE JUEGO
+            if (botHp === 0) {
+                triggerGameOver(true, "🏆 ¡VICTORIA! Lograste optimizar el proceso destruyendo la variabilidad del bot.");
+            } else if (p1Hp === 0) {
+                triggerGameOver(false, "💀 DERROTA: El bot dominó los errores de cálculo y destruyó tu proceso.");
+            }
+
+            activePowerUp = null;
+        }
+
+        function triggerGameOver(won, message) {
+            isGameOver = true;
+            clearInterval(timerInterval);
+
+            const modal = document.getElementById('game-modal');
+            const box = document.getElementById('modal-box');
+            const title = document.getElementById('modal-title');
+            const desc = document.getElementById('modal-desc');
+
+            modal.classList.remove('hidden');
+
+            if (won) {
+                title.textContent = "¡VICTORIA!";
+                title.className = "orbitron text-4xl font-black mb-2 text-emerald-400 glow-cyan";
+                box.className = "bg-slate-900 border-2 border-emerald-500 rounded-2xl p-8 max-w-md text-center box-glow";
+            } else {
+                title.textContent = "¡DERROTA!";
+                title.className = "orbitron text-4xl font-black mb-2 text-rose-500 glow-red";
+                box.className = "bg-slate-900 border-2 border-rose-600 rounded-2xl p-8 max-w-md text-center box-glow-red";
+            }
+
+            desc.textContent = message;
+            document.getElementById('btn-submit').disabled = true;
+            document.getElementById('action-panel').classList.add('opacity-50', 'pointer-events-none');
+        }
+
+        function closeModal() {
+            document.getElementById('game-modal').classList.add('hidden');
+        }
+
+        // INICIALIZAR
+        generateRandomScenario();
+    </script>
+</body>
+</html>
